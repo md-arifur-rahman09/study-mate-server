@@ -29,6 +29,20 @@ const verifyToken = (req, res, next) => {
 };
 
 
+// verify admin
+// isAdmin middleware
+const verifyAdmin = async (req, res, next) => {
+    const email = req.user?.email; // decoded from JWT
+    const user = await usersCollection.findOne({ email });
+
+    if (user?.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden access" });
+    }
+
+    next();
+};
+
+
 
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.n1yvnuo.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -48,7 +62,7 @@ async function run() {
         await client.connect();
 
         const db = client.db("studyMateDB");
-        usersCollection = db.collection("users");
+        const usersCollection = db.collection("users");
 
 
         // JWT Generate & Send via Cookie
@@ -99,19 +113,36 @@ async function run() {
         });
 
 
-        // check if admin
-        app.get("/users/admin/:email", async (req, res) => {
+
+        // GET: /users/role/:email
+        app.get("/users/role/:email", async (req, res) => {
             const email = req.params.email;
-            const user = await usersCollection.findOne({ email });
-            res.send( user?.role === "admin" );
+            const query = { email: email };
+
+            try {
+                const user = await usersCollection.findOne(query);
+
+                if (!user) {
+                    return res.status(404).send({ message: "User not found", role: null });
+                }
+
+                res.send({ role: user.role });
+            } catch (error) {
+                res.status(500).send({ message: "Server error", error: error.message });
+            }
         });
 
-        // check if instructor
-        app.get("/users/instructor/:email", async (req, res) => {
+        // GET: User full info
+        app.get("/users/details/:email", async (req, res) => {
             const email = req.params.email;
             const user = await usersCollection.findOne({ email });
-            res.send({ instructor: user?.role === "instructor" });
+            if (!user) {
+                return res.status(404).send({ message: "User not found" });
+            }
+            res.send(user);
         });
+
+
 
 
 
