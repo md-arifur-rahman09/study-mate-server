@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const jwt = require("jsonwebtoken");
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -61,8 +61,9 @@ async function run() {
         // Connect the client to the server	(optional starting in v4.7)
         await client.connect();
 
-        const db = client.db("studyMateDB");
-        const usersCollection = db.collection("users");
+
+        const usersCollection = client.db("studyMateDB").collection("users");
+        const instructorsCollection = client.db("studyMateDB").collection("instructors");
 
 
         // JWT Generate & Send via Cookie
@@ -100,8 +101,6 @@ async function run() {
                     await usersCollection.updateOne({ email: user.email }, updatedDoc);
                     return res.status(200).send({ message: "User already exists" });
                 }
-
-
                 // Default role: student 🚩
                 user.role = user.role || "student";
 
@@ -143,6 +142,125 @@ async function run() {
         });
 
 
+
+        // /................................instructor.......................
+        // instructors api
+        app.get("/instructor-requests", async (req, res) => {
+            const status = req.query.status || "pending";
+            try {
+                const requests = await instructorsCollection
+                    .find({ status })
+                    .toArray();
+                res.send(requests);
+            } catch (error) {
+                res.status(500).send({ error: "Failed to fetch requests" });
+            }
+        });
+
+
+        // approved instructors list
+        app.get("/approved-instructors", async (req, res) => {
+            const instructors = await instructorsCollection
+                .find({ status: "approved" })
+                .toArray();
+            res.send(instructors);
+        });
+
+
+
+
+        // POST: apply for instructor
+        app.post("/instructor-requests", async (req, res) => {
+            try {
+                const requestData = req.body;
+
+                // Check if already applied
+                const existing = await instructorsCollection.findOne({ email: requestData.email });
+
+                if (existing) {
+                    return res.status(409).send({ message: "You have already applied" });
+                }
+
+                // Default status: pending
+                requestData.status = "pending";
+                requestData.appliedAt = new Date().toISOString();
+
+                const result = await instructorsCollection.insertOne(requestData);
+                res.status(201).send(result);
+
+            } catch (error) {
+                console.error("Instructor Apply Error:", error.message);
+                res.status(500).send({ message: "Failed to submit application", error: error.message });
+            }
+        });
+
+
+        app.patch('/instructor-deactivate/:id', async (req, res) => {
+            const id = req.params.id;
+
+            try {
+                // Step 1: Update instructor status to "deactivated"
+                const result = await instructorsCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    {
+                        $set: {
+                            status: "deactivated",
+                            updatedAt: new Date().toISOString(),
+                        },
+                    }
+                );
+
+                // Step 2: Remove instructor role from users collection
+                const instructor = await instructorsCollection.findOne({ _id: new ObjectId(id) });
+                if (instructor?.email) {
+                    await usersCollection.updateOne(
+                        { email: instructor.email },
+                        { $set: { role: "student" } } // fallback to student
+                    );
+                }
+
+                res.send(result);
+            } catch (error) {
+                console.error(error);
+                res.status(500).send({ error: "Failed to deactivate instructor" });
+            }
+        });
+
+
+        app.patch("/instructor-requests/:id", async (req, res) => {
+            const id = req.params.id;
+            const { status } = req.body;
+
+            try {
+                // Step 1: Update the request status
+                const result = await instructorsCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    {
+                        $set: {
+                            status: status,
+                            updatedAt: new Date().toISOString(),
+                        },
+                    }
+                );
+
+                // Step 2: If approved, update user role
+                if (status === "approved") {
+                    const request = await instructorsCollection.findOne({ _id: new ObjectId(id) });
+
+                    if (request?.email) {
+                        await usersCollection.updateOne(
+                            { email: request.email },
+                            { $set: { role: "instructor" } }
+                        );
+                    }
+                }
+
+                res.send(result);
+            } catch (error) {
+                console.error(error); // Debugging
+                res.status(500).send({ error: "Failed to update status" });
+            }
+        });
 
 
 
