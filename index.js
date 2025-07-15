@@ -308,8 +308,40 @@ async function run() {
             }
         });
 
+        // PATCH: update study session
+        app.patch("/study-sessions/:id", async (req, res) => {
+            const id = req.params.id;
+            const updatedData = req.body;
+
+            try {
+                const result = await sessionsCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    {
+                        $set: {
+                            title: updatedData.title,
+                            description: updatedData.description,
+                            registrationStart: updatedData.registrationStart,
+                            registrationEnd: updatedData.registrationEnd,
+                            classStart: updatedData.classStart,
+                            classEnd: updatedData.classEnd,
+                            duration: updatedData.duration,
+                            registrationFee: parseInt(updatedData.registrationFee),
+                            updatedAt: new Date().toISOString()
+                        }
+                    }
+                );
+
+                res.send(result);
+            } catch (error) {
+                console.error("Update failed:", error);
+                res.status(500).send({ error: "Failed to update session" });
+            }
+        });
+
+
+
         // Reapply rejected session (change status to pending)
-        app.patch("/study-sessions/reapply/:id", verifyToken, async (req, res) => {
+        app.patch("/study-sessions/reapply/:id", async (req, res) => {
             try {
                 const id = req.params.id;
 
@@ -377,6 +409,7 @@ async function run() {
         });
 
         // PATCH: Reject session
+        // study-sessions/reject/:id   
         app.patch('/study-sessions/reject/:id', async (req, res) => {
             const id = req.params.id;
             const result = await sessionsCollection.updateOne(
