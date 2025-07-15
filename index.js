@@ -63,7 +63,9 @@ async function run() {
 
 
         const usersCollection = client.db("studyMateDB").collection("users");
-        const instructorsCollection = client.db("studyMateDB").collection("instructors");
+        const tutorsCollection = client.db("studyMateDB").collection("tutors");
+        const sessionsCollection = client.db("studyMateDB").collection("studySessions");
+        const rejectedSessionsCollection = client.db("studyMateDB").collection("rejectedSessions");
 
 
         // JWT Generate & Send via Cookie
@@ -143,12 +145,12 @@ async function run() {
 
 
 
-        // /................................instructor.......................
-        // instructors api
-        app.get("/instructor-requests", async (req, res) => {
+        // /................................tutor.......................
+        // tutors api
+        app.get("/tutor-requests", async (req, res) => {
             const status = req.query.status || "pending";
             try {
-                const requests = await instructorsCollection
+                const requests = await tutorsCollection
                     .find({ status })
                     .toArray();
                 res.send(requests);
@@ -158,24 +160,24 @@ async function run() {
         });
 
 
-        // approved instructors list
-        app.get("/approved-instructors", async (req, res) => {
-            const instructors = await instructorsCollection
+        // approved tutors list
+        app.get("/approved-tutors", async (req, res) => {
+            const tutors = await tutorsCollection
                 .find({ status: "approved" })
                 .toArray();
-            res.send(instructors);
+            res.send(tutors);
         });
 
 
 
 
-        // POST: apply for instructor
-        app.post("/instructor-requests", async (req, res) => {
+        // POST: apply for tutor
+        app.post("/tutor-requests", async (req, res) => {
             try {
                 const requestData = req.body;
 
                 // Check if already applied
-                const existing = await instructorsCollection.findOne({ email: requestData.email });
+                const existing = await tutorsCollection.findOne({ email: requestData.email });
 
                 if (existing) {
                     return res.status(409).send({ message: "You have already applied" });
@@ -185,22 +187,22 @@ async function run() {
                 requestData.status = "pending";
                 requestData.appliedAt = new Date().toISOString();
 
-                const result = await instructorsCollection.insertOne(requestData);
+                const result = await tutorsCollection.insertOne(requestData);
                 res.status(201).send(result);
 
             } catch (error) {
-                console.error("Instructor Apply Error:", error.message);
+                console.error("Tutor Apply Error:", error.message);
                 res.status(500).send({ message: "Failed to submit application", error: error.message });
             }
         });
 
 
-        app.patch('/instructor-deactivate/:id', async (req, res) => {
+        app.patch('/tutor-deactivate/:id', async (req, res) => {
             const id = req.params.id;
 
             try {
-                // Step 1: Update instructor status to "deactivated"
-                const result = await instructorsCollection.updateOne(
+                // Step 1: Update tutor status to "deactivated"
+                const result = await tutorsCollection.updateOne(
                     { _id: new ObjectId(id) },
                     {
                         $set: {
@@ -210,11 +212,11 @@ async function run() {
                     }
                 );
 
-                // Step 2: Remove instructor role from users collection
-                const instructor = await instructorsCollection.findOne({ _id: new ObjectId(id) });
-                if (instructor?.email) {
+                // Step 2: Remove tutor role from users collection
+                const tutor = await tutorsCollection.findOne({ _id: new ObjectId(id) });
+                if (tutor?.email) {
                     await usersCollection.updateOne(
-                        { email: instructor.email },
+                        { email: tutor.email },
                         { $set: { role: "student" } } // fallback to student
                     );
                 }
@@ -222,18 +224,18 @@ async function run() {
                 res.send(result);
             } catch (error) {
                 console.error(error);
-                res.status(500).send({ error: "Failed to deactivate instructor" });
+                res.status(500).send({ error: "Failed to deactivate tutor" });
             }
         });
 
 
-        app.patch("/instructor-requests/:id", async (req, res) => {
+        app.patch("/tutor-requests/:id", async (req, res) => {
             const id = req.params.id;
             const { status } = req.body;
 
             try {
                 // Step 1: Update the request status
-                const result = await instructorsCollection.updateOne(
+                const result = await tutorsCollection.updateOne(
                     { _id: new ObjectId(id) },
                     {
                         $set: {
@@ -245,12 +247,12 @@ async function run() {
 
                 // Step 2: If approved, update user role
                 if (status === "approved") {
-                    const request = await instructorsCollection.findOne({ _id: new ObjectId(id) });
+                    const request = await tutorsCollection.findOne({ _id: new ObjectId(id) });
 
                     if (request?.email) {
                         await usersCollection.updateOne(
                             { email: request.email },
-                            { $set: { role: "instructor" } }
+                            { $set: { role: "tutor" } }
                         );
                     }
                 }
@@ -262,6 +264,139 @@ async function run() {
             }
         });
 
+        // session api
+        // Get all approved & rejected sessions by tutor email
+        app.get("/my-study-sessions", async (req, res) => {
+            try {
+                const email = req.query.email;
+                const filter = {
+                    tutorEmail: email,
+                    status: { $in: ["approved", "rejected"] },
+                };
+
+                const sessions = await sessionsCollection.find(filter).toArray();
+                res.send(sessions);
+            } catch (error) {
+                res.status(500).send({ error: "Failed to load sessions" });
+            }
+        });
+
+        // POST: Create a new study session
+        app.post("/study-sessions", async (req, res) => {
+            try {
+                const sessionData = req.body;
+
+                // Basic validation (tutor name, email, title check)
+                if (!sessionData?.tutorEmail || !sessionData?.title) {
+                    return res.status(400).send({ error: "Missing required fields" });
+                }
+
+                // Optional: prevent duplicate session titles for same tutor
+                const duplicate = await sessionsCollection.findOne({
+                    title: sessionData.title,
+                    tutorEmail: sessionData.tutorEmail,
+                });
+                if (duplicate) {
+                    return res.status(409).send({ error: "Session with this title already exists" });
+                }
+
+                const result = await sessionsCollection.insertOne(sessionData);
+                res.status(201).send(result);
+            } catch (err) {
+                console.error("Error creating session:", err.message);
+                res.status(500).send({ error: "Failed to create study session" });
+            }
+        });
+
+        // Reapply rejected session (change status to pending)
+        app.patch("/study-sessions/reapply/:id", verifyToken, async (req, res) => {
+            try {
+                const id = req.params.id;
+
+                const result = await sessionsCollection.updateOne(
+                    { _id: new ObjectId(id), status: "rejected" },
+                    {
+                        $set: {
+                            status: "pending",
+                            reappliedAt: new Date().toISOString(), // optional tracking
+                        },
+                    }
+                );
+
+                res.send(result);
+            } catch (error) {
+                res.status(500).send({ error: "Failed to reapply session" });
+            }
+        });
+
+
+
+        // .....................................................................
+        // GET: All sessions (admin only)
+        app.get('/study-sessions', async (req, res) => {
+            const result = await sessionsCollection.find().toArray();
+            res.send(result);
+        });
+
+        // POST: reject a session with reason and feedback
+        app.post("/rejected-sessions", async (req, res) => {
+            try {
+                const rejectionData = req.body;
+                rejectionData.rejectedAt = new Date().toISOString();
+
+                const result = await rejectedSessionsCollection.insertOne(rejectionData);
+
+                // Update studySession status to "rejected"
+                await studySessionsCollection.updateOne(
+                    { _id: new ObjectId(rejectionData.sessionId) },
+                    { $set: { status: "rejected" } }
+                );
+
+                res.send({ success: true, insertedId: result.insertedId });
+            } catch (error) {
+                res.status(500).send({ error: "Failed to save rejection reason" });
+            }
+        });
+
+
+        // PATCH: Approve session (set fee)
+        app.patch('/study-sessions/approve/:id', async (req, res) => {
+            const id = req.params.id;
+            const { registrationFee } = req.body;
+            const result = await sessionsCollection.updateOne(
+                { _id: new ObjectId(id) },
+                {
+                    $set: {
+                        status: "approved",
+                        registrationFee: Number(registrationFee),
+                        updatedAt: new Date().toISOString()
+                    }
+                }
+            );
+            res.send(result);
+        });
+
+        // PATCH: Reject session
+        app.patch('/study-sessions/reject/:id', async (req, res) => {
+            const id = req.params.id;
+            const result = await sessionsCollection.updateOne(
+                { _id: new ObjectId(id) },
+                {
+                    $set: {
+                        status: "rejected",
+                        updatedAt: new Date().toISOString()
+                    }
+                }
+            );
+            res.send(result);
+        });
+
+        // DELETE: Session
+        app.delete('/study-sessions/:id', async (req, res) => {
+            const id = req.params.id;
+            const result = await sessionsCollection.deleteOne({ _id: new ObjectId(id) });
+            res.send(result);
+        });
 
 
         // Send a ping to confirm a successful connection
@@ -283,4 +418,3 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
-// Y6cT7PtMVVlWuMX6
