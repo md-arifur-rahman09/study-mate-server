@@ -69,7 +69,7 @@ async function run() {
         const bookedSessionsCollection = client.db("studyMateDB").collection("bookedSessions")
         const reviewsCollection = client.db("studyMateDB").collection("reviews");
         const notesCollection = client.db("studyMateDB").collection('notes')
-const materialsCollection=client.db("studyMateDB").collection("materials")
+        const materialsCollection = client.db("studyMateDB").collection("materials")
 
         // JWT Generate & Send via Cookie
         app.post("/jwt", async (req, res) => {
@@ -611,61 +611,72 @@ const materialsCollection=client.db("studyMateDB").collection("materials")
             res.send(result);
         });
 
-// ...........................................................................................materials collection
-// POST: Upload Material
-app.post('/materials', async (req, res) => {
-  const material = req.body;
-  const result = await materialsCollection.insertOne(material);
-  res.send({ success: result.insertedId ? true : false });
-});
+        // ...........................................................................................materials collection
+        // Method: GET
+        // URL: /materials
 
-app.get('/materials', async (req, res) => {
-  const { tutorEmail } = req.query;
-  if (!tutorEmail) {
-    return res.status(400).send({ error: 'Tutor email is required' });
-  }
+        app.get("/materials", async (req, res) => {
+            const result = await materialsCollection.find().sort({ createdAt: -1 }).toArray();
+            res.send(result);
+        });
 
-  const result = await materialsCollection.find({ tutorEmail }).toArray();
-  res.send(result);
-});
+        // POST: Upload Material
+        app.post('/materials', async (req, res) => {
+            const material = req.body;
+            const result = await materialsCollection.insertOne(material);
+            res.send({ success: result.insertedId ? true : false });
+        });
 
-// delete materials
-app.delete('/materials/:id', async (req, res) => {
-  const id = req.params.id;
-  const result = await materialsCollection.deleteOne({ _id: new ObjectId(id) });
+        app.get('/materials', async (req, res) => {
+            const { tutorEmail } = req.query;
+            if (!tutorEmail) {
+                return res.status(400).send({ error: 'Tutor email is required' });
+            }
 
-  if (result.deletedCount ) {
-    res.send({ success: true });
-  } else {
-    res.status(404).send({ success: false, message: 'Material not found' });
-  }
-});
+            const result = await materialsCollection.find({ tutorEmail }).toArray();
+            res.send(result);
+        });
 
-// update materials
-app.patch('/materials/:id', async (req, res) => {
-  const id = req.params.id;
-  const { title, driveLink, imageUrl } = req.body;
+        // delete materials
+        app.delete('/materials/:id', async (req, res) => {
+            const id = req.params.id;
+            const result = await materialsCollection.deleteOne({ _id: new ObjectId(id) });
 
-  const updateDoc = {
-    $set: {
-      title,
-      driveLink,
-      imageUrl,
-      updatedAt: new Date().toISOString(),
-    },
-  };
+            if (result.deletedCount) {
+                res.send({ success: true });
+            } else {
+                res.status(404).send({ success: false, message: 'Material not found' });
+            }
+        });
 
-  const result = await materialsCollection.updateOne(
-    { _id: new ObjectId(id) },
-    updateDoc
-  );
 
-  if (result.modifiedCount) {
-    res.send({ success: true });
-  } else {
-    res.status(404).send({ success: false, message: 'Material not updated' });
-  }
-});
+   
+
+        // update materials
+        app.patch('/materials/:id', async (req, res) => {
+            const id = req.params.id;
+            const { title, driveLink, imageUrl } = req.body;
+
+            const updateDoc = {
+                $set: {
+                    title,
+                    driveLink,
+                    imageUrl,
+                    updatedAt: new Date().toISOString(),
+                },
+            };
+
+            const result = await materialsCollection.updateOne(
+                { _id: new ObjectId(id) },
+                updateDoc
+            );
+
+            if (result.modifiedCount) {
+                res.send({ success: true });
+            } else {
+                res.status(404).send({ success: false, message: 'Material not updated' });
+            }
+        });
 
 
 
