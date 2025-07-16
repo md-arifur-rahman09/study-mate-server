@@ -532,7 +532,33 @@ async function run() {
             res.send({ success: true, insertedId: result.insertedId });
         });
 
+
+
+
+        // GET all booked sessions for a student
+app.get("/booked-sessions/:email", async (req, res) => {
+  const email = req.params.email;
+  try {
+    const sessions = await bookedSessionsCollection.find({ studentEmail: email }).toArray();
+    res.send(sessions);
+  } catch (err) {
+    res.status(500).send({ message: "Failed to fetch booked sessions" });
+  }
+});
+// GET all materials for a specific study session
+app.get("/materials/session/:sessionId", async (req, res) => {
+  const sessionId = req.params.sessionId;
+  try {
+    const materials = await materialsCollection.find({ sessionId }).toArray();
+    res.send(materials);
+  } catch (err) {
+    res.status(500).send({ message: "Failed to fetch materials" });
+  }
+});
+
         // Example endpoint: check if a session is already booked by this student
+
+
         app.get("/booked-sessions/check", async (req, res) => {
             const { studentEmail, sessionId } = req.query;
             if (!studentEmail || !sessionId) {
