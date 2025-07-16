@@ -67,7 +67,9 @@ async function run() {
         const sessionsCollection = client.db("studyMateDB").collection("studySessions");
         const rejectedSessionsCollection = client.db("studyMateDB").collection("rejectedSessions");
         const bookedSessionsCollection = client.db("studyMateDB").collection("bookedSessions")
-
+        const reviewsCollection = client.db("studyMateDB").collection("reviews");
+        const notesCollection = client.db("studyMateDB").collection('notes')
+const materialsCollection=client.db("studyMateDB").collection("materials")
 
         // JWT Generate & Send via Cookie
         app.post("/jwt", async (req, res) => {
@@ -462,7 +464,7 @@ async function run() {
                 const result = await rejectedSessionsCollection.insertOne(rejectionData);
 
                 // Update studySession status to "rejected"
-                await studySessionsCollection.updateOne(
+                await sessionsCollection.updateOne(
                     { _id: new ObjectId(rejectionData.sessionId) },
                     { $set: { status: "rejected" } }
                 );
@@ -550,6 +552,124 @@ async function run() {
             const result = await bookedSessionsCollection.find({ studentEmail: email }).toArray();
             res.send(result);
         });
+
+
+
+        // ...................................................................review 
+        app.post("/reviews", async (req, res) => {
+            const review = req.body;
+            const result = await reviewsCollection.insertOne(review);
+            res.send(result);
+        });
+
+        app.get('/reviews/:sessionId', async (req, res) => {
+            const sessionId = req.params.sessionId;
+            const reviews = await reviewsCollection.find({ sessionId }).toArray();
+            res.send(reviews);
+        });
+
+        // ..........................................................................  notes 
+        // POST a new note
+        app.post('/notes', async (req, res) => {
+            const note = req.body;
+            note.createdAt = new Date();
+            note.updatedAt = new Date();
+            note.status = "active";
+
+            const result = await notesCollection.insertOne(note);
+            res.send(result);
+        });
+
+        // GET all notes for a student
+        app.get('/notes/:email', async (req, res) => {
+            const { email } = req.params;
+            const notes = await notesCollection.find({ email }).toArray();
+            res.send(notes);
+        });
+
+
+        // PUT /notes/:id
+        app.put('/notes/:id', async (req, res) => {
+            const id = req.params.id;
+            const { title, description } = req.body;
+            const updateDoc = {
+                $set: {
+                    title,
+                    description,
+                    updatedAt: new Date()
+                }
+            };
+            const result = await notesCollection.updateOne({ _id: new ObjectId(id) }, updateDoc);
+            res.send(result);
+        });
+
+
+        // DELETE /notes/:id
+        app.delete('/notes/:id', async (req, res) => {
+            const id = req.params.id;
+            const result = await notesCollection.deleteOne({ _id: new ObjectId(id) });
+            res.send(result);
+        });
+
+// ...........................................................................................materials collection
+// POST: Upload Material
+app.post('/materials', async (req, res) => {
+  const material = req.body;
+  const result = await materialsCollection.insertOne(material);
+  res.send({ success: result.insertedId ? true : false });
+});
+
+app.get('/materials', async (req, res) => {
+  const { tutorEmail } = req.query;
+  if (!tutorEmail) {
+    return res.status(400).send({ error: 'Tutor email is required' });
+  }
+
+  const result = await materialsCollection.find({ tutorEmail }).toArray();
+  res.send(result);
+});
+
+// delete materials
+app.delete('/materials/:id', async (req, res) => {
+  const id = req.params.id;
+  const result = await materialsCollection.deleteOne({ _id: new ObjectId(id) });
+
+  if (result.deletedCount ) {
+    res.send({ success: true });
+  } else {
+    res.status(404).send({ success: false, message: 'Material not found' });
+  }
+});
+
+// update materials
+app.patch('/materials/:id', async (req, res) => {
+  const id = req.params.id;
+  const { title, driveLink, imageUrl } = req.body;
+
+  const updateDoc = {
+    $set: {
+      title,
+      driveLink,
+      imageUrl,
+      updatedAt: new Date().toISOString(),
+    },
+  };
+
+  const result = await materialsCollection.updateOne(
+    { _id: new ObjectId(id) },
+    updateDoc
+  );
+
+  if (result.modifiedCount) {
+    res.send({ success: true });
+  } else {
+    res.status(404).send({ success: false, message: 'Material not updated' });
+  }
+});
+
+
+
+
 
 
         // Send a ping to confirm a successful connection
