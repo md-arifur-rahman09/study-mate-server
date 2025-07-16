@@ -66,6 +66,7 @@ async function run() {
         const tutorsCollection = client.db("studyMateDB").collection("tutors");
         const sessionsCollection = client.db("studyMateDB").collection("studySessions");
         const rejectedSessionsCollection = client.db("studyMateDB").collection("rejectedSessions");
+        const bookedSessionsCollection = client.db("studyMateDB").collection("bookedSessions")
 
 
         // JWT Generate & Send via Cookie
@@ -116,7 +117,7 @@ async function run() {
 
 
         // GET: /users/role/:email
-        app.get("/users/role/:email", async (req, res) => {
+        app.get('/users/role/:email', async (req, res) => {
             const email = req.params.email;
             const query = { email: email };
 
@@ -143,9 +144,48 @@ async function run() {
             res.send(user);
         });
 
+        // GET all users
+        app.get("/users", async (req, res) => {
+            try {
+                const users = await usersCollection.find().toArray();
+                res.send(users);
+            } catch (error) {
+                res.status(500).send({ error: "Failed to get users" });
+            }
+        });
+
+
+        // PATCH role update
+        app.patch("/users/role/:id", async (req, res) => {
+            const { id } = req.params;
+            const { role } = req.body;
+
+            try {
+                const result = await usersCollection.updateOne(
+                    { _id: new ObjectId(id) },
+                    { $set: { role: role } }
+                );
+                res.send(result);
+            } catch (err) {
+                res.status(500).send({ error: "Failed to update role" });
+            }
+        });
 
 
         // /................................tutor.......................
+
+        // GET: /tutors?status=approved
+        app.get("/tutors", async (req, res) => {
+            const status = req.query.status;
+            try {
+                const query = status ? { status } : {};
+                const result = await tutorsCollection.find(query).toArray(); // use `tutorsCollection` if renamed
+                res.send(result);
+            } catch (err) {
+                res.status(500).send({ error: "Failed to fetch tutors" });
+            }
+        });
+
         // tutors api
         app.get("/tutor-requests", async (req, res) => {
             const status = req.query.status || "pending";
@@ -370,6 +410,49 @@ async function run() {
             res.send(result);
         });
 
+
+
+
+        // GET: Approved Study Sessions
+        app.get("/study-sessions/approved", async (req, res) => {
+            try {
+                const sessions = await sessionsCollection
+                    .find({ status: "approved" })
+                    .sort({ createdAt: -1 })
+                    .toArray();
+
+                res.send(sessions);
+            } catch (error) {
+                console.error("Error fetching approved study sessions:", error);
+                res.status(500).send({ error: "Internal Server Error" });
+            }
+        });
+
+
+
+        // Backend: inside your Express `run` function
+
+        app.get("/study-sessions/:id", async (req, res) => {
+            try {
+                const id = req.params.id;
+                const session = await sessionsCollection.findOne({ _id: new ObjectId(id) });
+
+                if (!session) {
+                    return res.status(404).send({ message: "Session not found" });
+                }
+
+                // Only allow approved sessions
+                if (session.status !== "approved") {
+                    return res.status(403).send({ message: "Not allowed to view this session" });
+                }
+
+                res.send(session);
+            } catch (error) {
+                res.status(500).send({ error: "Failed to get session details" });
+            }
+        });
+
+
         // POST: reject a session with reason and feedback
         app.post("/rejected-sessions", async (req, res) => {
             try {
@@ -428,6 +511,43 @@ async function run() {
         app.delete('/study-sessions/:id', async (req, res) => {
             const id = req.params.id;
             const result = await sessionsCollection.deleteOne({ _id: new ObjectId(id) });
+            res.send(result);
+        });
+        // booked session api
+        // POST: /booked-sessions
+        app.post("/booked-sessions", async (req, res) => {
+            const booking = req.body;
+            const exists = await bookedSessionsCollection.findOne({
+                sessionId: booking.sessionId,
+                studentEmail: booking.studentEmail,
+            });
+
+            if (exists) {
+                return res.send({ message: "already booked" });
+            }
+
+            const result = await bookedSessionsCollection.insertOne(booking);
+            res.send({ success: true, insertedId: result.insertedId });
+        });
+
+        // Example endpoint: check if a session is already booked by this student
+        app.get("/booked-sessions/check", async (req, res) => {
+            const { studentEmail, sessionId } = req.query;
+            if (!studentEmail || !sessionId) {
+                return res.send({ alreadyBooked: false });
+            }
+
+            const exists = await bookedSessionsCollection.findOne({
+                studentEmail,
+                sessionId,
+            });
+
+            res.send({ alreadyBooked: !!exists });
+        });
+
+        app.get("/booked-sessions/user/:email", async (req, res) => {
+            const email = req.params.email;
+            const result = await bookedSessionsCollection.find({ studentEmail: email }).toArray();
             res.send(result);
         });
 
