@@ -657,11 +657,22 @@ const query= {sessionId : id}
             res.send({ alreadyBooked: !!exists });
         });
 
-        app.get("/booked-sessions/user/:email", async (req, res) => {
-            const email = req.params.email;
-            const result = await bookedSessionsCollection.find({ studentEmail: email }).toArray();
-            res.send(result);
-        });
+  app.get("/booked-sessions/user/:email", async (req, res) => {
+  const email = req.params.email;
+
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 12;
+  const skip = (page - 1) * limit;
+
+  const total = await bookedSessionsCollection.countDocuments({ studentEmail: email });
+  const result = await bookedSessionsCollection
+    .find({ studentEmail: email })
+    .skip(skip)
+    .limit(limit)
+    .toArray();
+
+  res.send({ data: result, total });
+});
 
 
 
