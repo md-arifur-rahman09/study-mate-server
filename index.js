@@ -1,9 +1,11 @@
-require('dotenv').config();
+ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -69,7 +71,8 @@ async function run() {
         const bookedSessionsCollection = client.db("studyMateDB").collection("bookedSessions")
         const reviewsCollection = client.db("studyMateDB").collection("reviews");
         const notesCollection = client.db("studyMateDB").collection('notes')
-        const materialsCollection = client.db("studyMateDB").collection("materials")
+        const materialsCollection = client.db("studyMateDB").collection("materials");
+          const paymentsCollection = client.db('studyMateDB').collection('payments');
 
         // JWT Generate & Send via Cookie
         app.post("/jwt", async (req, res) => {
@@ -89,8 +92,65 @@ async function run() {
                 .send({ success: true });
         });
 
+// stripe payment
+app.post("/create-payment-intent", async (req, res) => {
+  const { amount } = req.body;
+  const price = parseInt(amount * 100); // Convert to cents
 
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: price,
+      currency: "usd",
+      payment_method_types: ["card"],
+    });
 
+    res.send({ clientSecret: paymentIntent.client_secret });
+  } catch (err) {
+    res.status(500).send({ error: err.message });
+  }
+});
+
+app.get('/booked-sessions/:id', async(req,res)=> {
+    const id=req.params.id;
+const query= {sessionId : id}
+    const result= await bookedSessionsCollection.findOne(query);
+    res.send(result);
+})
+    // get payment history by email query
+        // app.get('/payments', async (req, res) => {
+        //     const email = req.query.email;
+        //     const query = { email: email };
+
+        //     const result = await paymentsCollection.find(query).toArray();
+        //     res.send(result);
+        // })
+        
+
+  // payment post + update
+        // app.post('/payments', async (req, res) => {
+        //     const paymentData = req.body;
+        //     const parcelId = paymentData.id;
+
+        //     // Step 1: Save to paymentsCollection
+        //     const paymentResult = await paymentsCollection.insertOne(paymentData);
+
+        //     // Step 2: Update parcelsCollection's payment_status to "paid"
+        //     const filter = { _id: new ObjectId(parcelId) };
+        //     const updateDoc = {
+        //         $set: {
+        //             payment_status: 'paid'
+        //         }
+        //     };
+        //     const parcelUpdateResult = await parcelsCollection.updateOne(filter, updateDoc);
+
+        //     res.send(
+        //         paymentResult,
+
+        //     );
+
+        // });
+
+        
 
         // Save user after register/social login
         app.post("/users", async (req, res) => {
@@ -519,13 +579,18 @@ async function run() {
         // POST: /booked-sessions
         app.post("/booked-sessions", async (req, res) => {
             const booking = req.body;
+
             const exists = await bookedSessionsCollection.findOne({
                 sessionId: booking.sessionId,
                 studentEmail: booking.studentEmail,
             });
 
             if (exists) {
-                return res.send({ message: "already booked" });
+                // এখানেই সমস্যা ছিল! এটা ঠিক করুন নিচের মত:
+                return res.status(400).send({
+                    success: false,
+                    message: "already booked"
+                });
             }
 
             const result = await bookedSessionsCollection.insertOne(booking);
@@ -535,26 +600,27 @@ async function run() {
 
 
 
+
         // GET all booked sessions for a student
-app.get("/booked-sessions/:email", async (req, res) => {
-  const email = req.params.email;
-  try {
-    const sessions = await bookedSessionsCollection.find({ studentEmail: email }).toArray();
-    res.send(sessions);
-  } catch (err) {
-    res.status(500).send({ message: "Failed to fetch booked sessions" });
-  }
-});
-// GET all materials for a specific study session
-app.get("/materials/session/:sessionId", async (req, res) => {
-  const sessionId = req.params.sessionId;
-  try {
-    const materials = await materialsCollection.find({ sessionId }).toArray();
-    res.send(materials);
-  } catch (err) {
-    res.status(500).send({ message: "Failed to fetch materials" });
-  }
-});
+        app.get("/booked-sessions/:email", async (req, res) => {
+            const email = req.params.email;
+            try {
+                const sessions = await bookedSessionsCollection.find({ studentEmail: email }).toArray();
+                res.send(sessions);
+            } catch (err) {
+                res.status(500).send({ message: "Failed to fetch booked sessions" });
+            }
+        });
+        // GET all materials for a specific study session
+        app.get("/materials/session/:sessionId", async (req, res) => {
+            const sessionId = req.params.sessionId;
+            try {
+                const materials = await materialsCollection.find({ sessionId }).toArray();
+                res.send(materials);
+            } catch (err) {
+                res.status(500).send({ message: "Failed to fetch materials" });
+            }
+        });
 
         // Example endpoint: check if a session is already booked by this student
 
@@ -676,7 +742,7 @@ app.get("/materials/session/:sessionId", async (req, res) => {
         });
 
 
-   
+
 
         // update materials
         app.patch('/materials/:id', async (req, res) => {
