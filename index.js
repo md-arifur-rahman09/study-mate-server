@@ -127,6 +127,12 @@ const query= {sessionId : id}
         
 
   // payment post + update
+
+  app.post('/payments', async(req,res)=> {
+    const paymentData= req.body;
+    const result= await paymentsCollection.insertOne(paymentData);
+    res.send(result);
+  })
         // app.post('/payments', async (req, res) => {
         //     const paymentData = req.body;
         //     const parcelId = paymentData.id;
@@ -476,20 +482,32 @@ const query= {sessionId : id}
 
 
         // GET: Approved Study Sessions
-        app.get("/study-sessions/approved", async (req, res) => {
-            try {
-                const sessions = await sessionsCollection
-                    .find({ status: "approved" })
-                    .sort({ createdAt: -1 })
-                    .toArray();
+      app.get("/study-sessions/approved", async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 18;
+        const skip = (page - 1) * limit;
 
-                res.send(sessions);
-            } catch (error) {
-                console.error("Error fetching approved study sessions:", error);
-                res.status(500).send({ error: "Internal Server Error" });
-            }
-        });
+        const total = await sessionsCollection.countDocuments({ status: "approved" });
+        const sessions = await sessionsCollection
+            .find({ status: "approved" })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .toArray();
 
+        res.send({ sessions, total });
+    } catch (error) {
+        console.error("Error fetching approved study sessions:", error);
+        res.status(500).send({ error: "Internal Server Error" });
+    }
+});
+
+ app.get("/study-session/approved", async (req, res) => {
+
+    const result = await sessionsCollection.find({ status: "approved" }).sort({ createdAt: -1 }).toArray();
+    res.send(result)
+ })
 
 
         // Backend: inside your Express `run` function
