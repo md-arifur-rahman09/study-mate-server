@@ -1,4 +1,4 @@
- require('dotenv').config();
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
@@ -72,7 +72,7 @@ async function run() {
         const reviewsCollection = client.db("studyMateDB").collection("reviews");
         const notesCollection = client.db("studyMateDB").collection('notes')
         const materialsCollection = client.db("studyMateDB").collection("materials");
-          const paymentsCollection = client.db('studyMateDB').collection('payments');
+        const paymentsCollection = client.db('studyMateDB').collection('payments');
 
         // JWT Generate & Send via Cookie
         app.post("/jwt", async (req, res) => {
@@ -92,31 +92,26 @@ async function run() {
                 .send({ success: true });
         });
 
-// stripe payment
-app.post("/create-payment-intent", async (req, res) => {
-  const { amount } = req.body;
-  const price = parseInt(amount * 100); // Convert to cents
+        // stripe payment
+        app.post("/create-payment-intent", async (req, res) => {
+            const { amount } = req.body;
+            const price = parseInt(amount * 100); // Convert to cents
 
-  try {
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: price,
-      currency: "usd",
-      payment_method_types: ["card"],
-    });
+            try {
+                const paymentIntent = await stripe.paymentIntents.create({
+                    amount: price,
+                    currency: "usd",
+                    payment_method_types: ["card"],
+                });
 
-    res.send({ clientSecret: paymentIntent.client_secret });
-  } catch (err) {
-    res.status(500).send({ error: err.message });
-  }
-});
+                res.send({ clientSecret: paymentIntent.client_secret });
+            } catch (err) {
+                res.status(500).send({ error: err.message });
+            }
+        });
 
-app.get('/booked-sessions/:id', async(req,res)=> {
-    const id=req.params.id;
-const query= {sessionId : id}
-    const result= await bookedSessionsCollection.findOne(query);
-    res.send(result);
-})
-    // get payment history by email query
+
+        // get payment history by email query
         // app.get('/payments', async (req, res) => {
         //     const email = req.query.email;
         //     const query = { email: email };
@@ -124,15 +119,15 @@ const query= {sessionId : id}
         //     const result = await paymentsCollection.find(query).toArray();
         //     res.send(result);
         // })
-        
 
-  // payment post + update
 
-  app.post('/payments', async(req,res)=> {
-    const paymentData= req.body;
-    const result= await paymentsCollection.insertOne(paymentData);
-    res.send(result);
-  })
+        // payment post + update
+
+        app.post('/payments', async (req, res) => {
+            const paymentData = req.body;
+            const result = await paymentsCollection.insertOne(paymentData);
+            res.send(result);
+        })
         // app.post('/payments', async (req, res) => {
         //     const paymentData = req.body;
         //     const parcelId = paymentData.id;
@@ -156,7 +151,7 @@ const query= {sessionId : id}
 
         // });
 
-        
+
 
         // Save user after register/social login
         app.post("/users", async (req, res) => {
@@ -184,23 +179,7 @@ const query= {sessionId : id}
 
 
 
-        // GET: /users/role/:email
-        app.get('/users/role/:email', async (req, res) => {
-            const email = req.params.email;
-            const query = { email: email };
 
-            try {
-                const user = await usersCollection.findOne(query);
-
-                if (!user) {
-                    return res.status(404).send({ message: "User not found", role: null });
-                }
-
-                res.send({ role: user.role });
-            } catch (error) {
-                res.status(500).send({ message: "Server error", error: error.message });
-            }
-        });
 
         // GET: User full info
         app.get("/users/details/:email", async (req, res) => {
@@ -391,29 +370,26 @@ const query= {sessionId : id}
 
         // POST: Create a new study session
         app.post("/study-sessions", async (req, res) => {
-            try {
-                const sessionData = req.body;
 
-                // Basic validation (tutor name, email, title check)
-                if (!sessionData?.tutorEmail || !sessionData?.title) {
-                    return res.status(400).send({ error: "Missing required fields" });
-                }
+            const sessionData = req.body;
 
-                // Optional: prevent duplicate session titles for same tutor
-                const duplicate = await sessionsCollection.findOne({
-                    title: sessionData.title,
-                    tutorEmail: sessionData.tutorEmail,
-                });
-                if (duplicate) {
-                    return res.status(409).send({ error: "Session with this title already exists" });
-                }
-
-                const result = await sessionsCollection.insertOne(sessionData);
-                res.status(201).send(result);
-            } catch (err) {
-                console.error("Error creating session:", err.message);
-                res.status(500).send({ error: "Failed to create study session" });
+            // Basic validation (tutor name, email, title check)
+            if (!sessionData?.tutorEmail || !sessionData?.title) {
+                return res.status(400).send({ error: "Missing required fields" });
             }
+
+            // Optional: prevent duplicate session titles for same tutor
+            const duplicate = await sessionsCollection.findOne({
+                title: sessionData.title,
+                tutorEmail: sessionData.tutorEmail,
+            });
+            if (duplicate) {
+                return res.status(409).send({ error: "Session with this title already exists" });
+            }
+
+            const result = await sessionsCollection.insertOne(sessionData);
+            res.status(201).send(result);
+
         });
 
         // PATCH: update study session
@@ -421,29 +397,26 @@ const query= {sessionId : id}
             const id = req.params.id;
             const updatedData = req.body;
 
-            try {
-                const result = await sessionsCollection.updateOne(
-                    { _id: new ObjectId(id) },
-                    {
-                        $set: {
-                            title: updatedData.title,
-                            description: updatedData.description,
-                            registrationStart: updatedData.registrationStart,
-                            registrationEnd: updatedData.registrationEnd,
-                            classStart: updatedData.classStart,
-                            classEnd: updatedData.classEnd,
-                            duration: updatedData.duration,
-                            registrationFee: parseInt(updatedData.registrationFee),
-                            updatedAt: new Date().toISOString()
-                        }
-                    }
-                );
 
-                res.send(result);
-            } catch (error) {
-                console.error("Update failed:", error);
-                res.status(500).send({ error: "Failed to update session" });
-            }
+            const result = await sessionsCollection.updateOne(
+                { _id: new ObjectId(id) },
+                {
+                    $set: {
+                        title: updatedData.title,
+                        description: updatedData.description,
+                        registrationStart: updatedData.registrationStart,
+                        registrationEnd: updatedData.registrationEnd,
+                        classStart: updatedData.classStart,
+                        classEnd: updatedData.classEnd,
+                        duration: updatedData.duration,
+                        registrationFee: parseInt(updatedData.registrationFee),
+                        updatedAt: new Date().toISOString()
+                    }
+                }
+            );
+
+            res.send(result);
+
         });
 
 
@@ -482,55 +455,88 @@ const query= {sessionId : id}
 
 
         // GET: Approved Study Sessions
-      app.get("/study-sessions/approved", async (req, res) => {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 18;
-        const skip = (page - 1) * limit;
+        app.get("/study-sessions/approved", async (req, res) => {
 
-        const total = await sessionsCollection.countDocuments({ status: "approved" });
-        const sessions = await sessionsCollection
-            .find({ status: "approved" })
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(limit)
-            .toArray();
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 18;
+            const skip = (page - 1) * limit;
 
-        res.send({ sessions, total });
-    } catch (error) {
-        console.error("Error fetching approved study sessions:", error);
-        res.status(500).send({ error: "Internal Server Error" });
-    }
-});
+            const total = await sessionsCollection.countDocuments({ status: "approved" });
+            const sessions = await sessionsCollection
+                .find({ status: "approved" })
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .toArray();
 
- app.get("/study-session/approved", async (req, res) => {
+            res.send({ sessions, total });
 
-    const result = await sessionsCollection.find({ status: "approved" }).sort({ createdAt: -1 }).toArray();
-    res.send(result)
- })
+        });
 
+        app.get("/study-session/approved", async (req, res) => {
+
+            const result = await sessionsCollection.find({ status: "approved" }).sort({ createdAt: -1 }).toArray();
+            res.send(result)
+        })
+
+        app.get('/study-session/approved', async (req, res) => {
+            const email = req.query.tutorEmail;
+            const query = {
+                tutorEmail: email,
+                status: "approved"
+            };
+
+            const result = await sessionsCollection.find(query).toArray();
+            res.send(result);
+        });
 
         // Backend: inside your Express `run` function
 
-        app.get("/study-sessions/:id", async (req, res) => {
-            try {
-                const id = req.params.id;
-                const session = await sessionsCollection.findOne({ _id: new ObjectId(id) });
 
-                if (!session) {
-                    return res.status(404).send({ message: "Session not found" });
-                }
 
-                // Only allow approved sessions
-                if (session.status !== "approved") {
-                    return res.status(403).send({ message: "Not allowed to view this session" });
-                }
 
-                res.send(session);
-            } catch (error) {
-                res.status(500).send({ error: "Failed to get session details" });
-            }
+        
+
+        // user role check
+        app.get('/users/role/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { email: email };
+
+            const user = await usersCollection.findOne(query);
+
+            res.send({ role: user.role });
         });
+
+        // check student email & sessionId
+        app.get("/booked-sessions/check", async (req, res) => {
+            const { studentEmail, sessionId } = req.query;
+
+            const exists = await bookedSessionsCollection.findOne({
+                studentEmail,
+                sessionId,
+            });
+
+            res.send(exists);
+        });
+
+
+
+        app.get("/study-sessions/:id", async (req, res) => {
+            const id = req.params.id;
+            const session = await sessionsCollection.findOne({ _id: new ObjectId(id) });
+            res.send(session);
+        });
+
+
+        // app.get('/booked-sessions/:id', async (req, res) => {
+        //     const id = req.params.id;
+        //     const query = { sessionId: id }
+        //     const result = await bookedSessionsCollection.findOne(query);
+        //     res.send(result);
+        // })
+
+
+
 
 
         // POST: reject a session with reason and feedback
@@ -643,36 +649,24 @@ const query= {sessionId : id}
         // Example endpoint: check if a session is already booked by this student
 
 
-        app.get("/booked-sessions/check", async (req, res) => {
-            const { studentEmail, sessionId } = req.query;
-            if (!studentEmail || !sessionId) {
-                return res.send({ alreadyBooked: false });
-            }
 
-            const exists = await bookedSessionsCollection.findOne({
-                studentEmail,
-                sessionId,
-            });
 
-            res.send({ alreadyBooked: !!exists });
+        app.get("/booked-sessions/user/:email", async (req, res) => {
+            const email = req.params.email;
+
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 12;
+            const skip = (page - 1) * limit;
+
+            const total = await bookedSessionsCollection.countDocuments({ studentEmail: email });
+            const result = await bookedSessionsCollection
+                .find({ studentEmail: email })
+                .skip(skip)
+                .limit(limit)
+                .toArray();
+
+            res.send({ data: result, total });
         });
-
-  app.get("/booked-sessions/user/:email", async (req, res) => {
-  const email = req.params.email;
-
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 12;
-  const skip = (page - 1) * limit;
-
-  const total = await bookedSessionsCollection.countDocuments({ studentEmail: email });
-  const result = await bookedSessionsCollection
-    .find({ studentEmail: email })
-    .skip(skip)
-    .limit(limit)
-    .toArray();
-
-  res.send({ data: result, total });
-});
 
 
 
