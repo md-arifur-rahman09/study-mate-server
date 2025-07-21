@@ -19,25 +19,25 @@ app.use(express.json());
 app.use(cookieParser());
 
 // verify token
-const verifyToken = (req, res, next) => {
-    const token = req.cookies?.token;
-    if (!token) return res.status(401).send({ error: "Unauthorized" });
+// const verifyToken = (req, res, next) => {
+//     const token = req.cookies?.token;
+//     if (!token) return res.status(401).send({ error: "Unauthorized" });
 
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-        if (err) return res.status(401).send({ error: "Invalid token" });
-        req.user = decoded;
+//     jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+//         if (err) return res.status(401).send({ error: "Invalid token" });
+//         req.user = decoded;
 
-        next();
-    });
-};
+//         next();
+//     });
+// };
 
 // verify email 
-const verifyEmail = (req, res, next) => {
-    if (req.params.email !== req.user.email) {
-        return res.status(403).send({ message: "forbidden access" });
-    }
-    next();
-};
+// const verifyEmail = (req, res, next) => {
+//     if (req.params.email !== req.user.email) {
+//         return res.status(403).send({ message: "forbidden access" });
+//     }
+//     next();
+// };
 
 
 
@@ -73,35 +73,36 @@ async function run() {
 
         // verify admin
         // isAdmin middleware
-        const verifyAdmin = async (req, res, next) => {
-            const email = req.user?.email; // decoded from JWT
-            console.log("verify admin email", email)
-            const user = await usersCollection.findOne({ email });
+        // const verifyAdmin = async (req, res, next) => {
+        //     const email = req.user?.email; // decoded from JWT
+        //     // console.log("verify admin email", email)
+        //     const user = await usersCollection.findOne({ email });
 
-            if (user?.role !== "admin") {
-                return res.status(403).send({ message: "Forbidden access" });
-            }
+        //     if (user?.role !== "admin") {
+        //         return res.status(403).send({ message: "Forbidden access" });
+        //     }
 
-            next();
-        };
+        //     next();
+        // };
 
         // verifyTutor
-        const verifyTutor = async (req, res, next) => {
-            const email = req.user?.email; // decoded from JWT
-            const user = await usersCollection.findOne({ email });
+        // const verifyTutor = async (req, res, next) => {
+        //     const email = req.user?.email; // decoded from JWT
+        //     const user = await usersCollection.findOne({ email });
 
-            if (user?.role !== "tutor") {
-                return res.status(403).send({ message: "Forbidden access" });
-            }
+        //     if (user?.role !== "tutor") {
+        //         return res.status(403).send({ message: "Forbidden access" });
+        //     }
 
-            next();
-        };
+        //     next();
+        // };
+
         // JWT Generate & Send via Cookie
         app.post("/jwt", async (req, res) => {
             const user = req.body;
 
             const token = jwt.sign(user, process.env.JWT_SECRET, {
-                expiresIn: "7d",
+                expiresIn: "3h",
             });
 
             res
@@ -213,8 +214,8 @@ async function run() {
             res.send(user);
         });
 
-        // GET all users
-        app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
+        // GET all users    verifyToken, verifyAdmin,
+        app.get("/users",  async (req, res) => {
             try {
                 const users = await usersCollection.find().toArray();
                 res.send(users);
@@ -255,8 +256,8 @@ async function run() {
             }
         });
 
-        // tutors api
-        app.get("/tutor-requests", verifyToken, verifyAdmin, async (req, res) => {
+        // tutors api    verifyToken, verifyAdmin,
+        app.get("/tutor-requests",  async (req, res) => {
             const status = req.query.status || "pending";
             try {
                 const requests = await tutorsCollection
@@ -269,8 +270,8 @@ async function run() {
         });
 
 
-        // approved tutors list
-        app.get("/approved-tutors", verifyToken, verifyAdmin, async (req, res) => {
+        // approved tutors list      verifyToken, verifyAdmin,
+        app.get("/approved-tutors", async (req, res) => {
             const tutors = await tutorsCollection
                 .find({ status: "approved" })
                 .toArray();
@@ -373,9 +374,9 @@ async function run() {
             }
         });
 
-        // session api
+        // session api    verifyToken,verifyTutor,
         // Get all approved & rejected sessions by tutor email
-        app.get("/my-study-sessions",verifyToken,verifyTutor, async (req, res) => {
+        app.get("/my-study-sessions", async (req, res) => {
             try {
                 const email = req.query.email;
                 const filter = {
@@ -467,8 +468,8 @@ async function run() {
 
 
         // .....................................................................
-        // GET: All sessions (admin only)
-        app.get('/study-sessions', verifyToken, verifyAdmin, async (req, res) => {
+        // GET: All sessions (admin only)   verifyToken, verifyAdmin, 
+        app.get('/study-sessions', async (req, res) => {
             const result = await sessionsCollection.find().toArray();
             res.send(result);
         });
@@ -495,13 +496,16 @@ async function run() {
 
         });
 
-        app.get("/study-session/approved", async (req, res) => {
+        app.get("/studySession/approved", async (req, res) => {
 
             const result = await sessionsCollection.find({ status: "approved" }).sort({ createdAt: -1 }).toArray();
             res.send(result)
         })
 
-        app.get('/study-session/approved',verifyToken,verifyTutor,async (req, res) => {
+
+
+// verifyToken,verifyTutor,
+        app.get('/study-session/approved',async (req, res) => {
             const email = req.query.tutorEmail;
             const query = {
                 tutorEmail: email,
@@ -647,8 +651,8 @@ async function run() {
 
 
 
-        // GET all booked sessions for a student
-        app.get("/booked-sessions/:email", verifyToken, verifyEmail, async (req, res) => {
+        // GET all booked sessions for a student   verifyToken, verifyEmail,
+        app.get("/booked-sessions/:email",  async (req, res) => {
             const email = req.params.email;
             try {
                 const sessions = await bookedSessionsCollection.find({ studentEmail: email }).toArray();
@@ -672,8 +676,8 @@ async function run() {
 
 
 
-
-        app.get("/booked-sessions/user/:email", verifyToken, verifyEmail, async (req, res) => {
+// verifyToken, verifyEmail,
+        app.get("/booked-sessions/user/:email",  async (req, res) => {
             const email = req.params.email;
 
             const page = parseInt(req.query.page) || 1;
@@ -717,8 +721,9 @@ async function run() {
             res.send(result);
         });
 
-        // GET all notes for a student
-        app.get('/notes/:email', verifyToken, verifyEmail, async (req, res) => {
+
+        // GET all notes for a student    verifyToken, verifyEmail,
+        app.get('/notes/:email',  async (req, res) => {
             const { email } = req.params;
             const notes = await notesCollection.find({ email }).toArray();
             res.send(notes);
@@ -752,7 +757,9 @@ async function run() {
         // Method: GET
         // URL: /materials
 
-        app.get("/materials", verifyToken, verifyAdmin, async (req, res) => {
+
+        //  verifyToken, verifyAdmin,
+        app.get("/materials", async (req, res) => {
             const result = await materialsCollection.find().sort({ createdAt: -1 }).toArray();
             res.send(result);
         });
@@ -764,7 +771,10 @@ async function run() {
             res.send({ success: result.insertedId ? true : false });
         });
 
-        app.get('/material', verifyToken, verifyTutor, async (req, res) => {
+
+        
+// verifyToken, verifyTutor,
+        app.get('/material',  async (req, res) => {
             const { tutorEmail } = req.query;
             if (!tutorEmail) {
                 return res.status(400).send({ error: 'Tutor email is required' });
